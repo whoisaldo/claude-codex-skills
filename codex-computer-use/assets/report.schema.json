@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "summary", "checks", "findings", "console", "screenshots"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "blocked"],
+      "description": "pass: every check passed and no blocker/major finding. fail: a check failed or a blocker/major finding exists. blocked: the checks could not be performed."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Two or three sentences: what was verified and the overall state of the page."
+    },
+    "checks": {
+      "type": "array",
+      "description": "One entry per check requested in the brief, in order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "status", "evidence", "screenshot"],
+        "properties": {
+          "check": {"type": "string"},
+          "status": {"type": "string", "enum": ["pass", "fail", "blocked"]},
+          "evidence": {"type": "string", "description": "What was done and what was observed, quoting exact text where relevant."},
+          "screenshot": {"type": "string", "description": "Path of the screenshot that shows the result, or empty."}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "Defects observed, whether or not the brief asked about them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "title", "detail", "likely_cause", "screenshot"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["blocker", "major", "minor", "nit"]},
+          "title": {"type": "string"},
+          "detail": {"type": "string", "description": "Concrete evidence: element, ref or selector, quoted text, what is wrong."},
+          "likely_cause": {"type": "string", "description": "Probable cause in CSS or markup terms, or empty if unknown."},
+          "screenshot": {"type": "string", "description": "Path of the screenshot that shows it, or empty."}
+        }
+      }
+    },
+    "console": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Console errors and page errors observed, verbatim. Empty if none."
+    },
+    "screenshots": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Every screenshot taken, in order."
+    }
+  }
+}

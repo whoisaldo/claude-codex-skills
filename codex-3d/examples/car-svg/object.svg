@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 55 1000 305">
+  <defs>
+    <linearGradient id="paint" x2="0.15" y2="1">
+      <stop stop-color="#FFE273"/>
+      <stop offset="0.39" stop-color="#F5C518"/>
+      <stop offset="0.72" stop-color="#F5C518"/>
+      <stop offset="1" stop-color="#C9971A"/>
+    </linearGradient>
+    <linearGradient id="lower-paint" x2="0" y2="1">
+      <stop stop-color="#DBAC20"/>
+      <stop offset="1" stop-color="#C9971A"/>
+    </linearGradient>
+    <linearGradient id="window" x1="0.2" x2="0.7" y2="1">
+      <stop stop-color="#3A4152"/>
+      <stop offset="0.48" stop-color="#252B38"/>
+      <stop offset="1" stop-color="#1B1F2A"/>
+    </linearGradient>
+    <linearGradient id="window-reflection" x2="0.8" y2="1">
+      <stop stop-color="#748298" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#3A4152" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="rubber">
+      <stop offset="0.73" stop-color="#15161A"/>
+      <stop offset="0.87" stop-color="#24262C"/>
+      <stop offset="1" stop-color="#15161A"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0.15" x2="0.8" y2="1">
+      <stop stop-color="#D8DBE2"/>
+      <stop offset="0.42" stop-color="#8C8F99"/>
+      <stop offset="0.76" stop-color="#5B606B"/>
+      <stop offset="1" stop-color="#B1B5BF"/>
+    </linearGradient>
+    <radialGradient id="rotor">
+      <stop stop-color="#343740"/>
+      <stop offset="0.7" stop-color="#555962"/>
+      <stop offset="1" stop-color="#30343D"/>
+    </radialGradient>
+    <filter id="shadow-soft" x="-10%" y="-100%" width="120%" height="300%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="lamp-glow" x="-40%" y="-150%" width="180%" height="400%">
+      <feGaussianBlur stdDeviation="2.8"/>
+    </filter>
+    <clipPath id="body-outline">
+      <path d="M -466 -22 -316 -39 -194 -101.92 -167 -109.12 -8 -110.56 40 -104.8 188 -40 391 -29 465 -8 477 16 468 74 443 98 362 102 360 74 A83 83 0 0 0 194 74L192 104H-191L-193 74A83 83 0 0 0-359 74L-361 98-445 89-468 64-477 15Z"/>
+    </clipPath>
+    <linearGradient id="side-paint" x2="0" y2="1">
+      <stop stop-color="#F9CE35"/>
+      <stop offset="0.54" stop-color="#F5C518"/>
+      <stop offset="1" stop-color="#D9A61D"/>
+    </linearGradient>
+  </defs>
+
+  <g id="ground" transform="translate(500 340)">
+    <path d="M-480 0H480" fill="none" stroke="#45444A" stroke-width="1"/>
+  </g>
+  <g id="shadow" transform="translate(501 331)">
+    <ellipse rx="447" ry="10" fill="#08090C" opacity="0.65" filter="url(#shadow-soft)"/>
+    <ellipse rx="367" ry="5" fill="#08090C" opacity="0.38"/>
+  </g>
+
+  <g id="body" transform="translate(500 190)">
+    <path d="M -466 -22 -316 -39 -194 -101.92 -167 -109.12 -8 -110.56 40 -104.8 188 -40 391 -29 465 -8 477 16 468 74 443 98 362 102 360 74 A83 83 0 0 0 194 74L192 104H-191L-193 74A83 83 0 0 0-359 74L-361 98-445 89-468 64-477 15Z" fill="url(#paint)" stroke="#8C681D" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M -466 -22 -316 -39 -194 -101.92 -167 -109.12 -8 -110.56 40 -104.8 188 -40 166 -37 29 -96.88 -9 -102.64 -163 -101.2 -185 -94.72 -304 -27 Z" fill="#FFE173"/>
+    <path d="M -310 -28 -190 -95.44 -163 -102.64 -9 -104.08 32 -99.04 179 -36 -143 -31 Z" fill="#A37B1B"/>
+    <path d="M-474 10-366 13-340 5H-206L-163 11 170 6 215-5 462-1 477 16 468 74 443 98 362 102 360 74A83 83 0 0 0 194 74L192 104H-191L-193 74A83 83 0 0 0-359 74L-361 98-445 89-468 64Z" fill="url(#side-paint)" clip-path="url(#body-outline)"/>
+    <path d="M-471 57-362 67-361 98-445 89-468 64ZM-192 71 193 71 192 104H-191ZM361 65 470 51 468 74 443 98 362 102Z" fill="url(#lower-paint)"/>
+    <path d="M-469 13-366 16-339 8H-207L-163 14 170 9 216-2 465 2" fill="none" stroke="#FFEA91" stroke-width="1.2" stroke-linejoin="round" clip-path="url(#body-outline)"/>
+    <path d="M-471 55-363 63M-192 65H193M361 60 470 47" fill="none" stroke="#B88B1B" stroke-width="1"/>
+    <path d="M-364 80V74A88 88 0 0 1-188 74V87M189 87V74A88 88 0 0 1 365 74V81" fill="none" stroke="#FFE073" stroke-width="2"/>
+    <path d="M-359 87V74A83 83 0 0 1-193 74V91M194 91V74A83 83 0 0 1 360 74V87" fill="none" stroke="#463B25" stroke-width="2"/>
+    <path d="M-189 97H190L187 108H-185ZM365 92 443 87 471 67 467 82 446 103 365 107ZM-470 71-443 83-365 88-365 102-445 96-470 81Z" fill="#202127"/>
+    <path d="M-181 98H183M371 94 442 90M-443 86-373 92" fill="none" stroke="#77756A" stroke-width="1"/>
+    <path d="M196-33 382-23 446-9 218-13Z" fill="#FFD64D"/>
+    <path d="M209-28 382-19 442-7M-462-18-325-32" fill="none" stroke="#FFF0AA" stroke-width="1.3"/>
+  </g>
+
+  <g id="glass" transform="translate(462 110)">
+    <path d="M -259 40 -145 -16.16 -128 -20.48 H -80 L -98 39.28 Z" fill="url(#window)" stroke="#191D25" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M -82 39.28 -65 -20.48 H 31 L 61 -16.16 196 40 Z" fill="url(#window)" stroke="#191D25" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M -247 36.4 -141 -14 -128 -16.88 H -94 L -178 36.4 Z M -59 -16.88 H 29 L 56 -12.56 99 6.88 -73 32.08 Z" fill="url(#window-reflection)"/>
+    <path d="M -143 -16.16 -128 -20.48 H -80 M -65 -20.48 H 31 L 61 -16.16 184 36.4" fill="none" stroke="#727887" stroke-width="1"/>
+    <path d="M -253 43 -99 42 M -81 42 198 43" fill="none" stroke="#FBE07C" stroke-width="1.2"/>
+  </g>
+
+  <g id="door" transform="translate(651 156)">
+    <path d="M0 0 8 49-15 112-30 120H-243L-264 109-278 38-282 1" fill="none" stroke="#93711D" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M-256 119H-34L-20 112" fill="none" stroke="#FFE06A" stroke-width="1"/>
+    <path d="M-246 26H-207L-211 33H-247Z" fill="#6E581F"/>
+    <path d="M-242 26H-211" fill="none" stroke="#FFF0A8" stroke-width="1"/>
+  </g>
+  <g id="mirror" transform="translate(638 158)">
+    <path d="M0 0-10-10 0-13 12-4 13 5H3Z" fill="#20232B"/>
+    <path d="M-8-12-18-25 6-28 26-21 21-11Z" fill="#EABD25" stroke="#96701B" stroke-width="1"/>
+    <path d="M-16-23 6-26 21-21" fill="none" stroke="#FFE994" stroke-width="1.2"/>
+    <path d="M-8-12 20-12 23-17-11-19Z" fill="#292D37"/>
+  </g>
+  <g id="rear-vents" transform="translate(136 175)">
+    <path d="M-37-9 14-13 8-7-38-3ZM-39 1 6-3 0 3-40 7ZM-41 11-2 7-8 13-42 17Z" fill="#3D3826"/>
+    <path d="M-38-3 8-7M-40 7 0 3M-42 17-8 13" fill="none" stroke="#FFE176" stroke-width="1"/>
+  </g>
+  <g id="front-intake" transform="translate(917 243)">
+    <path d="M-22-8 49-17 45 1 29 13-22 17Z" fill="#26272C"/>
+    <path d="M-16-3 41-10M-16 3 38-4M-16 9 30 3" fill="none" stroke="#4A4B4E" stroke-width="1.5"/>
+    <path d="M-22-9 49-18" fill="none" stroke="#FFE07B" stroke-width="1"/>
+  </g>
+  <g id="headlight" transform="translate(938 195)">
+    <path d="M-29-8 32-5 36 9-31 7Z" fill="#252932"/>
+    <path d="M-26-3 31-1 32 4-27 3Z" fill="#EAF6FF" filter="url(#lamp-glow)" opacity="0.85"/>
+    <path d="M-26-3 31-1 32 4-27 3Z" fill="#EAF6FF"/>
+    <path d="M-13-2V3M3-2V3M19-1V4" fill="none" stroke="#B6CEDD" stroke-width="0.7"/>
+  </g>
+  <g id="taillight" transform="translate(44 190)">
+    <path d="M-13-9 18-8 15 10-17 8Z" fill="#342028"/>
+    <path d="M-11-5 14-4 12 6-14 5Z" fill="#FF3B3B"/>
+    <path d="M-10-4 13-3" fill="none" stroke="#FF9290" stroke-width="1"/>
+    <path d="M-4-3-6 5" fill="none" stroke="#A6222B" stroke-width="1"/>
+  </g>
+
+  <g id="wheel-rear" transform="translate(224 264)">
+    <circle r="76" fill="url(#rubber)"/>
+    <circle r="69" fill="none" stroke="#35373E" stroke-width="1"/>
+    <path d="M-64-20A67 67 0 0 1 35-57M51 43A67 67 0 0 1-42 52" fill="none" stroke="#42444B" stroke-width="1" opacity="0.65"/>
+    <circle r="58" fill="#090B10" stroke="#0D0F13" stroke-width="2"/>
+    <circle r="55" fill="url(#rim)"/>
+    <circle r="49" fill="#161A22"/>
+    <circle r="42" fill="url(#rotor)" stroke="#666A73" stroke-width="0.8"/>
+    <circle r="34" fill="none" stroke="#282C34" stroke-width="1" stroke-dasharray="2 7"/>
+    <path d="M-6-10-10-49-1-53 8-49 6-10ZM6-10 37-33 45-28 46-19 12 0ZM12 0 47 18 46 27 38 33 6 10ZM6 10 10 49 1 53-8 49-6 10ZM-6 10-37 33-45 28-46 19-12 0ZM-12 0-47-18-46-27-38-33-6-10Z" fill="url(#rim)" stroke="#ACAFB8" stroke-width="0.6" stroke-linejoin="round"/>
+    <circle r="52" fill="none" stroke="#D1D4DB" stroke-width="1"/>
+    <circle r="13" fill="#777D89" stroke="#CBCFD8" stroke-width="1"/>
+    <circle r="7" fill="#272B34" stroke="#989DA8" stroke-width="1"/>
+    <path d="M0-10V-8M8.7-5 7-4M8.7 5 7 4M0 10V8M-8.7 5-7 4M-8.7-5-7-4" fill="none" stroke="#E1E3E8" stroke-width="1.7" stroke-linecap="round"/>
+  </g>
+  <g id="wheel-front" transform="translate(777 264)">
+    <circle r="76" fill="url(#rubber)"/>
+    <circle r="69" fill="none" stroke="#35373E" stroke-width="1"/>
+    <path d="M-64-20A67 67 0 0 1 35-57M51 43A67 67 0 0 1-42 52" fill="none" stroke="#42444B" stroke-width="1" opacity="0.65"/>
+    <circle r="58" fill="#090B10" stroke="#0D0F13" stroke-width="2"/>
+    <circle r="55" fill="url(#rim)"/>
+    <circle r="49" fill="#161A22"/>
+    <circle r="42" fill="url(#rotor)" stroke="#666A73" stroke-width="0.8"/>
+    <circle r="34" fill="none" stroke="#282C34" stroke-width="1" stroke-dasharray="2 7"/>
+    <path d="M-6-10-10-49-1-53 8-49 6-10ZM6-10 37-33 45-28 46-19 12 0ZM12 0 47 18 46 27 38 33 6 10ZM6 10 10 49 1 53-8 49-6 10ZM-6 10-37 33-45 28-46 19-12 0ZM-12 0-47-18-46-27-38-33-6-10Z" fill="url(#rim)" stroke="#ACAFB8" stroke-width="0.6" stroke-linejoin="round"/>
+    <circle r="52" fill="none" stroke="#D1D4DB" stroke-width="1"/>
+    <circle r="13" fill="#777D89" stroke="#CBCFD8" stroke-width="1"/>
+    <circle r="7" fill="#272B34" stroke="#989DA8" stroke-width="1"/>
+    <path d="M0-10V-8M8.7-5 7-4M8.7 5 7 4M0 10V8M-8.7 5-7 4M-8.7-5-7-4" fill="none" stroke="#E1E3E8" stroke-width="1.7" stroke-linecap="round"/>
+  </g>
+</svg>

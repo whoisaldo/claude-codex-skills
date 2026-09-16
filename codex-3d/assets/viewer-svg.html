@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>codex-3d viewer (svg)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #1a1a22; overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #stage svg { width: 84vw; height: 84vh; }
+  #status { position: fixed; left: 12px; bottom: 10px; font: 12px ui-monospace, Menlo, monospace;
+            color: #6b6b80; pointer-events: none; }
+  #error { position: fixed; inset: 0; display: none; margin: 0; padding: 32px; background: #2a0f12;
+           color: #ffb4b4; font: 15px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="status"></div>
+<pre id="error"></pre>
+<script type="module">
+// Shows ./object.svg inline (so ids, CSS and animation hooks behave exactly as in a page).
+// Query params: bg=RRGGBB background colour without '#'.
+const q = new URLSearchParams(location.search);
+const BG = '#' + (q.get('bg') || '1a1a22');
+document.body.style.background = BG;
+
+const errorEl = document.getElementById('error');
+const statusEl = document.getElementById('status');
+function report(payload) {
+  try { fetch('/__status', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {}); } catch {}
+}
+function fail(err) {
+  const text = String(err && err.stack || err);
+  errorEl.textContent = 'object.svg failed\n\n' + text;
+  errorEl.style.display = 'block';
+  document.title = 'ERROR';
+  report({ ok: false, error: text });
+}
+
+try {
+  const res = await fetch('./object.svg?v=' + Date.now());
+  if (!res.ok) throw new Error('object.svg not found (HTTP ' + res.status + ')');
+  const text = await res.text();
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const perr = doc.querySelector('parsererror');
+  if (perr) throw new Error('object.svg is not well-formed XML:\n' + perr.textContent);
+  const root = doc.documentElement;
+  if (root.nodeName !== 'svg') throw new Error('object.svg root element is <' + root.nodeName + '>, expected <svg>');
+  const svg = document.importNode(root, true);
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  document.getElementById('stage').appendChild(svg);
+
+  const ids = [...svg.querySelectorAll('[id]')].map(e => e.id);
+  const images = svg.querySelectorAll('image').length;
+  const external = [...svg.querySelectorAll('[href],[xlink\\:href]')]
+    .map(e => e.getAttribute('href') || e.getAttribute('xlink:href'))
+    .filter(h => h && !h.startsWith('#')).length;
+  const scripts = svg.querySelectorAll('script').length;
+  const elements = svg.querySelectorAll('*').length;
+  statusEl.textContent = `viewBox ${svg.getAttribute('viewBox') || 'MISSING'}  |  ${elements} elements  |  ` +
+    `${ids.length} ids  |  ${images} <image>  |  ${external} external refs  |  ${text.length.toLocaleString()} bytes`;
+  document.title = 'READY';
+  report({ ok: true, viewBox: svg.getAttribute('viewBox'), elements, ids: ids.slice(0, 80),
+           images, externalRefs: external, scripts, bytes: text.length });
+} catch (err) {
+  fail(err);
+}
+</script>
+</body>
+</html>

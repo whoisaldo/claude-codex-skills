@@ -1,0 +1,34 @@
+--- a/index.html (as built)
++++ b/index.html (after both fixes)
+@@ -7,16 +7,17 @@
+   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; background: #0f1115; color: #e6e6e6; }
+   header { padding: 24px 32px; border-bottom: 1px solid #262a33; display: flex; justify-content: space-between; align-items: center; }
+   nav a { color: #9aa4b2; margin-left: 20px; text-decoration: none; }
+-  main { padding: 32px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
++  main { padding: 32px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+   .card { background: #171a21; border: 1px solid #262a33; border-radius: 12px; padding: 20px; }
+   .card h2 { margin: 0 0 8px; font-size: 14px; color: #9aa4b2; font-weight: 500; }
+   .card .num { font-size: 32px; font-weight: 600; }
+-  .card.overflow { width: 180px; white-space: nowrap; overflow: visible; }
+-  .card.lowcontrast p { color: #22252b; }
++  .card.overflow .num { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
++  .card.lowcontrast p { color: #9aa4b2; }
+   button { background: #4f46e5; color: white; border: 0; padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+   button:hover { background: #4338ca; }
+   #status { margin-top: 12px; color: #9aa4b2; }
+   input { background: #0f1115; border: 1px solid #262a33; color: #e6e6e6; padding: 8px 10px; border-radius: 8px; }
++  input::placeholder { color: #9aa4b2; }
+ </style>
+ </head>
+ <body>
+@@ -27,8 +28,8 @@
+ <main>
+   <div class="card"><h2>Active users</h2><div class="num">1,284</div></div>
+   <div class="card"><h2>Revenue</h2><div class="num">$48.2k</div></div>
+-  <div class="card overflow"><h2>Longest project name</h2><div class="num">Supercalifragilisticexpialidocious Initiative</div></div>
+-  <div class="card lowcontrast"><h2>Notes</h2><p>This paragraph is intentionally nearly invisible.</p></div>
++  <div class="card overflow"><h2>Longest project name</h2><div class="num" title="Supercalifragilisticexpialidocious Initiative">Supercalifragilisticexpialidocious Initiative</div></div>
++  <div class="card lowcontrast"><h2>Notes</h2><p>Weekly sync moved to Thursdays. Q4 targets are under review.</p></div>
+   <div class="card">
+     <h2>Invite</h2>
+     <input id="email" placeholder="email@example.com">

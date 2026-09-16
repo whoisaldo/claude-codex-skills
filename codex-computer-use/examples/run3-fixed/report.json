@@ -1,0 +1,48 @@
+{
+  "ok": true,
+  "verdict": "pass",
+  "url": "http://127.0.0.1:8792/",
+  "viewport": "1440x900",
+  "media": null,
+  "model": "gpt-6-astra",
+  "effort": "max",
+  "thread_id": "01a0ab9b-56bb-7662-8b96-af35a104f829",
+  "elapsed_s": 171.5,
+  "run_dir": "/private/tmp/codex-probe/e2e-fixed2",
+  "report": {
+    "verdict": "pass",
+    "summary": "All three checks passed at 1440\u00d7900. Initial and submitted states showed no visible defects, and both console and page-error logs were empty.",
+    "checks": [
+      {
+        "check": "Header shows 'Probe Dashboard' and three nav links: Overview, Reports, Settings.",
+        "status": "pass",
+        "evidence": "Header visibly reads 'Probe Dashboard' with exactly three navigation links: 'Overview', 'Reports', and 'Settings'.",
+        "screenshot": "/private/tmp/codex-probe/e2e-fixed2/shots/01-initial.png"
+      },
+      {
+        "check": "Fill ali@example.com and click 'Send invite'; verify the exact status beneath the form.",
+        "status": "pass",
+        "evidence": "Filled @e6 with 'ali@example.com' and clicked 'Send invite' at @e7. The visible #status beneath the controls reads exactly 'Invite sent to ali@example.com'.",
+        "screenshot": "/private/tmp/codex-probe/e2e-fixed2/shots/03-after-submit.png"
+      },
+      {
+        "check": "Card content stays contained, row widths match, the project name has an ellipsis, and all text is readable.",
+        "status": "pass",
+        "evidence": "All five cards are approximately 445.33 px wide, differing by less than 0.02 px from browser rounding. Content stays inside card boundaries; page scrollWidth equals the 1440 px viewport. The project name visibly ends in an ellipsis, with overflow:hidden and text-overflow:ellipsis measured on .card.overflow .num. The 'email@example.com' placeholder is readable at 7.49:1 contrast; secondary card text measures 6.90:1.",
+        "screenshot": "/private/tmp/codex-probe/e2e-fixed2/shots/01-initial.png"
+      }
+    ],
+    "findings": [],
+    "console": [],
+    "screenshots": [
+      "/private/tmp/codex-probe/e2e-fixed2/shots/01-initial.png",
+      "/private/tmp/codex-probe/e2e-fixed2/shots/02-email-filled.png",
+      "/private/tmp/codex-probe/e2e-fixed2/shots/03-after-submit.png"
+    ]
+  },
+  "screenshots": [
+    "/private/tmp/codex-probe/e2e-fixed2/shots/01-initial.png",
+    "/private/tmp/codex-probe/e2e-fixed2/shots/02-email-filled.png",
+    "/private/tmp/codex-probe/e2e-fixed2/shots/03-after-submit.png"
+  ]
+}

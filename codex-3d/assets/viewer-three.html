@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>codex-3d viewer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #1a1a22; overflow: hidden; }
+  canvas { display: block; }
+  #labels { position: fixed; inset: 0; pointer-events: none; }
+  #labels div { position: absolute; padding: 10px 12px; font: 600 13px/1 ui-monospace, Menlo, monospace;
+                color: #8d8da3; text-transform: uppercase; letter-spacing: .08em; }
+  #status { position: fixed; left: 12px; bottom: 10px; font: 12px ui-monospace, Menlo, monospace;
+            color: #6b6b80; pointer-events: none; }
+  #error { position: fixed; inset: 0; display: none; margin: 0; padding: 32px; background: #2a0f12;
+           color: #ffb4b4; font: 15px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow: auto; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@{{THREE_VERSION}}/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@{{THREE_VERSION}}/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="labels"></div>
+<div id="status"></div>
+<pre id="error"></pre>
+<script type="module">
+// Consumes ./object.js (contract: createObject() -> THREE.Group, optional updateObject(group, t, dt), meta).
+// Query params:
+//   view=hero|sheet   hero = single three-quarter view (default); sheet = 2x2 contact sheet
+//   static=1          render one frame and stop (headless screenshots)
+//   bg=RRGGBB         background colour without '#'
+//   t=SECONDS         animation time for the static frame (default 0)
+const q = new URLSearchParams(location.search);
+const VIEW = q.get('view') || 'hero';
+const STATIC = q.get('static') === '1';
+const BG = '#' + (q.get('bg') || '1a1a22');
+const T0 = parseFloat(q.get('t') || '0');
+document.body.style.background = BG;
+
+const errorEl = document.getElementById('error');
+const statusEl = document.getElementById('status');
+const labelsEl = document.getElementById('labels');
+
+function report(payload) {
+  // The build script's local server accepts this; any other host 404s and that is fine.
+  try { fetch('/__status', { method: 'POST', body: JSON.stringify(payload) }).catch(() => {}); } catch {}
+}
+let failed = false;
+function fail(err) {
+  if (failed) return; failed = true;
+  const text = String(err && err.stack || err);
+  errorEl.textContent = 'object.js failed\n\n' + text;
+  errorEl.style.display = 'block';
+  document.title = 'ERROR';
+  report({ ok: false, error: text });
+}
+window.addEventListener('error', e => fail(e.error || e.message));
+window.addEventListener('unhandledrejection', e => fail(e.reason));
+
+try {
+  const THREE = await import('three');
+  const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+  const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
+  const mod = await import('./object.js?v=' + Date.now());
+  if (typeof mod.createObject !== 'function') throw new Error('object.js must export createObject()');
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BG);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+  const object = mod.createObject();
+  if (!object || !object.isObject3D) throw new Error('createObject() must return a THREE.Object3D');
+  object.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(object);
+  if (typeof mod.updateObject === 'function') mod.updateObject(object, T0, 0);
+
+  // Frame the object from its bounds.
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.length() / 2, 1e-3);
+
+  // Studio lighting scaled to the object.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.5));
+  const key = new THREE.DirectionalLight(0xffffff, 2.0);
+  key.position.set(center.x + radius * 1.5, center.y + radius * 3, center.z + radius * 2);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  const s = radius * 2.2;
+  Object.assign(key.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 0.1, far: radius * 12 });
+  key.shadow.bias = -0.0005;
+  key.shadow.normalBias = radius * 0.01;
+  key.target.position.copy(center);
+  scene.add(key, key.target);
+  const rim = new THREE.DirectionalLight(0xbfd8ff, 0.7);
+  rim.position.set(center.x - radius * 2, center.y + radius, center.z - radius * 2);
+  scene.add(rim);
+
+  // Shadow catcher under the lowest point.
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(radius * 30, radius * 30),
+                                new THREE.ShadowMaterial({ opacity: 0.35 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = box.min.y;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Cameras. Directions are unit vectors from the object's centre; front is +Z.
+  const DIRS = {
+    hero:  new THREE.Vector3(1.0, 0.55, 1.35),
+    front: new THREE.Vector3(0.0, 0.18, 1.0),
+    side:  new THREE.Vector3(1.0, 0.18, 0.0),
+    top:   new THREE.Vector3(0.0, 1.0, 0.001),
+  };
+  const corners = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z])
+    corners.push(new THREE.Vector3(x, y, z));
+  function makeCamera(dir, aspect, fov = 32, fill = 0.82) {
+    // Start from a bounding-sphere fit, then tighten so the projected bounding
+    // box spans `fill` of the frame (a sphere fit leaves long objects small).
+    const cam = new THREE.PerspectiveCamera(fov, aspect, radius * 0.01, radius * 100);
+    const d = dir.clone().normalize();
+    let dist = radius / Math.sin(THREE.MathUtils.degToRad(fov) / 2);
+    if (aspect < 1) dist /= aspect;
+    for (let i = 0; i < 4; i++) {
+      cam.position.copy(center).addScaledVector(d, dist);
+      cam.lookAt(center);
+      cam.updateMatrixWorld();
+      cam.updateProjectionMatrix();
+      let extent = 0;
+      for (const c of corners) {
+        const p = c.clone().project(cam);
+        extent = Math.max(extent, Math.abs(p.x), Math.abs(p.y));
+      }
+      dist *= extent / fill;
+    }
+    cam.position.copy(center).addScaledVector(d, dist);
+    cam.lookAt(center);
+    cam.updateProjectionMatrix();
+    return cam;
+  }
+  function renderView(cam, x, y, w, h) {
+    renderer.setViewport(x, y, w, h);
+    renderer.setScissor(x, y, w, h);
+    renderer.setScissorTest(true);
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+    renderer.render(scene, cam);
+  }
+
+  let controls = null, cams = {};
+  function layout() {
+    const W = innerWidth, H = innerHeight;
+    renderer.setSize(W, H);
+    labelsEl.innerHTML = '';
+    if (VIEW === 'sheet') {
+      const w = W / 2, h = H / 2;
+      cams = {
+        hero:  [makeCamera(DIRS.hero,  w / h), 0, h, w, h, 'three-quarter'],
+        front: [makeCamera(DIRS.front, w / h), w, h, w, h, 'front (+Z)'],
+        side:  [makeCamera(DIRS.side,  w / h), 0, 0, w, h, 'side (+X)'],
+        top:   [makeCamera(DIRS.top,   w / h), w, 0, w, h, 'top'],
+      };
+      for (const [cam, x, y, cw, ch, label] of Object.values(cams)) {
+        const d = document.createElement('div');
+        d.textContent = label;
+        d.style.left = x + 'px';
+        d.style.top = (H - y - ch) + 'px';
+        labelsEl.appendChild(d);
+      }
+    } else {
+      const cam = makeCamera(DIRS.hero, W / H);
+      cams = { hero: [cam, 0, 0, W, H, ''] };
+      if (!STATIC) {
+        controls = new OrbitControls(cam, renderer.domElement);
+        controls.target.copy(center);
+        controls.enableDamping = true;
+      }
+    }
+  }
+  function draw() {
+    for (const [cam, x, y, w, h] of Object.values(cams)) renderView(cam, x, y, w, h);
+  }
+
+  layout();
+  draw();
+
+  const names = [];
+  object.traverse(o => { if (o !== object && o.name) names.push(o.name); });
+  const tris = renderer.info.render.triangles;
+  const fmt = v => (Math.round(v * 1000) / 1000).toString();
+  statusEl.textContent = `size ${fmt(size.x)} x ${fmt(size.y)} x ${fmt(size.z)} m  |  ` +
+    `y-min ${fmt(box.min.y)}  |  ${tris.toLocaleString()} tris  |  ${names.length} named parts`;
+  document.title = 'READY';
+  report({
+    ok: true, triangles: tris,
+    size: [size.x, size.y, size.z], min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z],
+    parts: names.slice(0, 80), meta: mod.meta || null,
+    hasUpdate: typeof mod.updateObject === 'function',
+    renderer: renderer.getContext().getParameter(renderer.getContext().RENDERER),
+  });
+
+  if (!STATIC) {
+    const clock = new THREE.Clock();
+    let t = T0;
+    renderer.setAnimationLoop(() => {
+      const dt = clock.getDelta();
+      t += dt;
+      if (typeof mod.updateObject === 'function') mod.updateObject(object, t, dt);
+      if (controls) controls.update();
+      draw();
+    });
+    addEventListener('resize', () => { layout(); draw(); });
+  }
+} catch (err) {
+  fail(err);
+}
+</script>
+</body>
+</html>

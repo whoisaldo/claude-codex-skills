@@ -1,0 +1,8 @@
+Object: one low, wide, angular retro-futuristic muscle sports car
+Use: hero object for a dark website intro. The page will animate it drifting across the screen with spinning, steering wheels, so the wheels must be separate parts.
+Style: sleek stylised realism (not a toy, not a box car): long hood, cab-rearward, short rear deck, wide rear haunches, a slim full-width LED headlight strip, full-width tail light bar, subtle ducktail spoiler, side mirrors, low-profile tyres on dark 5-spoke alloys, brake discs visible behind the spokes
+Materials: body high-gloss yellow #F5C518 clearcoat paint; dark tinted glass; matte black lower trim, splitter and diffuser; brushed dark-chrome accents; headlight strip emissive cool white; tail bar emissive red
+Size: about 4.6 m long, 1.95 m wide, 1.25 m tall, wheelbase about 2.75 m
+Parts to expose: wheel_fl, wheel_fr, wheel_rl, wheel_rr (each spins about its own axle); steer_fl, steer_fr (pivot groups that contain the front wheels, for steering); body; headlights; taillight; spoiler
+Idle animation: none, the page drives it; updateObject may be omitted
+Constraints: no text, no logos, symmetric left/right, all four tyres touch y = 0 exactly, under 150k triangles

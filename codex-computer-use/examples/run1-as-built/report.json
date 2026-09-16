@@ -1,0 +1,63 @@
+{
+  "ok": true,
+  "verdict": "fail",
+  "url": "http://127.0.0.1:8791/",
+  "viewport": "1440x900",
+  "media": null,
+  "model": "gpt-6-astra",
+  "effort": "max",
+  "thread_id": "01a0ab8a-cd88-7e32-9542-1603d1f76dc3",
+  "elapsed_s": 168.0,
+  "run_dir": "/private/tmp/codex-probe/e2e",
+  "report": {
+    "verdict": "fail",
+    "summary": "At 1440\u00d7900, the header and invite confirmation pass. The layout fails because the project name overflows its card and the Notes paragraph is nearly invisible; console and page-error logs were empty.",
+    "checks": [
+      {
+        "check": "Header shows 'Probe Dashboard' and links Overview, Reports, Settings.",
+        "status": "pass",
+        "evidence": "The header visibly shows \"Probe Dashboard\" and exactly three navigation links: \"Overview\", \"Reports\", \"Settings\".",
+        "screenshot": "/private/tmp/codex-probe/e2e/shots/01-initial.png"
+      },
+      {
+        "check": "Submitting ali@example.com shows the exact invite confirmation.",
+        "status": "pass",
+        "evidence": "Filled @e6 with \"ali@example.com\" and clicked \"Send invite\" @e7. The visible #status beneath the controls reads exactly \"Invite sent to ali@example.com\".",
+        "screenshot": "/private/tmp/codex-probe/e2e/shots/03-after-submit.png"
+      },
+      {
+        "check": "Every card's content stays inside its card; all text is readable.",
+        "status": "fail",
+        "evidence": "In both initial and final views, the project name extends outside its card and beyond the viewport. The Notes paragraph is nearly indistinguishable from its background. The other three cards' content fits.",
+        "screenshot": "/private/tmp/codex-probe/e2e/shots/03-after-submit.png"
+      }
+    ],
+    "findings": [
+      {
+        "severity": "major",
+        "title": "Project name overflows its card and the viewport",
+        "detail": "At 1440\u00d7900, .card.overflow .num visibly spills beyond the \"Longest project name\" card and is cut off at the screen edge. Its DOM text is \"Supercalifragilisticexpialidocious Initiative\". The text ends at x=1594 while the card ends at x=1185, creating 154px of page overflow.",
+        "likely_cause": ".card.overflow has width: 180px, white-space: nowrap and overflow: visible. Its .num text is 32px and measures approximately 610px wide.",
+        "screenshot": "/private/tmp/codex-probe/e2e/shots/01-initial.png"
+      },
+      {
+        "severity": "major",
+        "title": "Notes paragraph has almost no contrast",
+        "detail": "In both captured states, .card.lowcontrast p is barely visible beneath \"Notes\". Its text is \"This paragraph is intentionally nearly invisible.\" Computed foreground #22252b against card background #171a21 yields approximately 1.13:1 contrast.",
+        "likely_cause": "The paragraph's dark text color is too close to the card background, making the 16px body text unreadable.",
+        "screenshot": "/private/tmp/codex-probe/e2e/shots/03-after-submit.png"
+      }
+    ],
+    "console": [],
+    "screenshots": [
+      "/private/tmp/codex-probe/e2e/shots/01-initial.png",
+      "/private/tmp/codex-probe/e2e/shots/02-email-filled.png",
+      "/private/tmp/codex-probe/e2e/shots/03-after-submit.png"
+    ]
+  },
+  "screenshots": [
+    "/private/tmp/codex-probe/e2e/shots/01-initial.png",
+    "/private/tmp/codex-probe/e2e/shots/02-email-filled.png",
+    "/private/tmp/codex-probe/e2e/shots/03-after-submit.png"
+  ]
+}
