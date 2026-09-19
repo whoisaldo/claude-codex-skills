@@ -17,14 +17,24 @@ Pipeline (default `--passes 2`):
              asked to fix what it can see. Render again.
 Everything Codex may touch is confined to the build dir. Nothing else in the
 project is read or written by this script.
+
+`--format blender` swaps step 1: Astra models in a real Blender through the
+Blender MCP server and exports ./object.glb (+ ./object.blend). The script
+starts its own throwaway Blender on a free port for the run and makes it the
+only MCP server Codex can see, so a Blender the user already has open (and
+whatever is unsaved in it) is never touched. Blender itself runs outside the
+Codex sandbox; the MCP server's safe mode keeps Astra's Python to bpy.
 """
 
 import argparse
+import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -42,10 +52,18 @@ ASSETS = SKILL_DIR / "assets"
 VENDOR = SKILL_DIR / "vendor"            # holds node_modules/three for check.mjs
 
 FILES = {
-    "three": {"object": "object.js", "viewer": "viewer-three.html", "views": ["hero", "sheet"]},
-    "svg":   {"object": "object.svg", "viewer": "viewer-svg.html", "views": ["hero"]},
+    "three":   {"object": "object.js", "viewer": "viewer-three.html", "views": ["hero", "sheet"]},
+    "svg":     {"object": "object.svg", "viewer": "viewer-svg.html", "views": ["hero"]},
+    "blender": {"object": "object.glb", "viewer": "viewer-three.html", "views": ["hero", "sheet"]},
 }
 VIEW_PNG = {"hero": "preview.png", "sheet": "sheet.png"}
+
+# --format blender: the per-run MCP server entry, and the only tools Astra gets.
+# The asset libraries (Sketchfab, Poly Haven, Hyper3D...) stay off: the object
+# must be Astra's own geometry, with no third-party licences or fetched text.
+MCP_SERVER = "codex3d_blender"
+MCP_TOOLS = ["get_addon_status", "get_scene_info", "get_object_info", "execute_blender_code",
+             "get_viewport_screenshot", "export_scene", "bpy_api_lookup", "describe_node_type"]
 
 
 def log(msg):
@@ -130,8 +148,84 @@ Contract for ./object.svg - a standalone, hand-authored SVG:
 {COMMON_RULES}"""
 
 
-def build_prompt(fmt, spec, inputs):
-    head = THREE_CONTRACT if fmt == "three" else SVG_CONTRACT
+def blender_contract(build_dir, scene, existing=False):
+    """Contract for --format blender. `scene` is the marker name given to the
+    throwaway Blender's scene, so Astra can tell it is not in someone's session."""
+    start = ("It has ./object.blend open, which holds the finished object. Do not rebuild it "
+             "and do not delete anything the request does not mention."
+             if existing else
+             "It holds Blender's default startup scene: delete the default cube, camera and "
+             "light, then build.")
+    return f"""\
+You are acting as a headless 3D asset builder. You model one object in a real
+Blender through the MCP server `{MCP_SERVER}`, and you leave two files in the
+current working directory (a scratch build folder, {build_dir}):
+./object.blend (the editable source) and ./object.glb (what the page loads).
+
+The Blender instance:
+- It is a throwaway Blender started for this job. Call get_scene_info first:
+  the scene must be named `{scene}`. If it has any other name you are
+  connected to someone else's Blender. Change nothing, reply exactly
+  `WRONG BLENDER` and stop.
+- {start}
+- execute_blender_code runs in safe mode: only bpy, bmesh, mathutils and pure
+  standard-library modules (math, random, itertools...) import. No os, sys,
+  numpy, open(), file or network access; files are written only through bpy
+  operators and the export_scene tool.
+- Work in small steps: one part or one fix per execute_blender_code call (a
+  call must return within 180 s), and look at get_viewport_screenshot after
+  every meaningful step. Read blender_version from get_addon_status and use
+  bpy_api_lookup instead of guessing an API that changes between versions.
+- Wherever a tool takes `user_prompt`, pass the literal string "codex-3d".
+  Never paste this prompt into it.
+
+Contract for the object:
+- Blender units are metres and Z is up. The object rests on the ground plane
+  z = 0, is centred on x = 0 and y = 0, and its FRONT FACES -Y (Blender's
+  front view). The glTF export turns that into three.js space: Y up, resting
+  on y = 0, front facing +Z. Real-world size: a car is ~4.5 m long, a mug
+  ~0.1 m tall.
+- One root Empty at the world origin, named after the object, with every
+  other object parented under it.
+- Every part the specification names is its own object (or an Empty pivot
+  with children) carrying exactly that name, with its origin at the natural
+  pivot: a wheel's axle centre, a door's hinge line. The page finds parts with
+  `gltf.scene.getObjectByName('wheel_fl')` and turns them about their origins.
+  Names use lowercase letters, digits and underscores only: three.js rewrites
+  dots and spaces, so Blender's automatic `.001` suffix breaks the lookup.
+- Apply scale (object scale 1, 1, 1) on every mesh.
+- Materials: Principled BSDF only, driven by plain values (base colour,
+  metallic, roughness, coat, transmission, alpha, emission colour and
+  strength). Those export to glTF PBR. No image textures and no procedural
+  texture or shader-math nodes: they do not survive the export. Look nodes up
+  by type, never by name. One named material per distinct surface.
+- Idle animation only if the specification asks for one: keyframe object
+  transforms on the parts as a loop that ends in its starting pose. It exports
+  as glTF animation clips. Otherwise leave no animation data.
+- No lights, cameras or helper geometry in the scene (the viewer supplies an
+  environment map, key/rim lights and shadows).
+- Budget: under 200,000 triangles after modifiers. Prefer fewer, better-shaped
+  pieces.
+- Quality bar: it must read as the real thing from every angle. Correct
+  proportions, continuous silhouette, no gaps, no floating or intersecting
+  parts, no z-fighting, symmetric where the object is symmetric. Use what
+  Blender is good at: bmesh and from_pydata hulls, curves, and mirror, bevel,
+  solidify, subdivision and boolean modifiers (applied on export), smooth
+  shading with sharp edges where the form has them. A pile of plain cubes and
+  cylinders is a failure unless the object really is cubes and cylinders.
+- Finish in this order, and again after every later fix:
+  1. save the source with execute_blender_code:
+     bpy.ops.wm.save_as_mainfile(filepath="{build_dir}/object.blend")
+  2. export with the export_scene tool: filepath "{build_dir}/object.glb",
+     object_names [your root Empty], apply_modifiers true
+  3. in your shell run `node check.mjs object.glb`. It loads the exported file
+     the way three.js will and checks the contract, bounds and triangle
+     budget. Fix what it reports in Blender until it prints OK.
+{COMMON_RULES}"""
+
+
+def build_prompt(fmt, spec, inputs, blender=None):
+    head = {"three": THREE_CONTRACT, "svg": SVG_CONTRACT}.get(fmt) or blender_contract(*blender)
     parts = [head, ""]
     if inputs:
         parts += ["Attached image(s) are references. Their role is described in the "
@@ -156,8 +250,12 @@ def status_summary(status):
             f"{status.get('externalRefs')} external refs.")
 
 
+BLENDER_FINISH = ("Re-save ./object.blend, re-export ./object.glb and run `node check.mjs "
+                  "object.glb` until it prints OK before finishing.")
+
+
 def review_prompt(fmt, status, views):
-    if fmt == "three":
+    if fmt in ("three", "blender"):
         what = ("preview.png (three-quarter hero view) and sheet.png (2x2 contact sheet: "
                 "three-quarter, front +Z, side +X, top)")
         checks = ("proportions, silhouette, gaps, floating or intersecting parts, "
@@ -171,12 +269,20 @@ def review_prompt(fmt, status, views):
                   "misaligned parts, and whether it reads as the real thing")
         target = "./object.svg"
         finish = "Validate with `xmllint --noout object.svg` before finishing."
+    fix = f"by editing {target}"
+    if fmt == "blender":
+        # The render is three.js loading the export, not Blender's viewport.
+        checks += (", and anything that looked right in Blender but did not survive the "
+                   "export to three.js (lost materials, unapplied modifiers, flipped normals)")
+        target = "./object.glb"
+        fix = f"in the Blender scene, which is still open behind `{MCP_SERVER}`"
+        finish = BLENDER_FINISH
     return "\n".join([
         f"Attached: {what} of the {target} you just wrote, rendered by the viewer.",
         status_summary(status),
         "",
         f"Review the render critically against the specification: {checks}. Fix every "
-        f"defect you can see by editing {target}. Keep what already works. If the render "
+        f"defect you can see {fix}. Keep what already works. If the render "
         "shows an error, fix the error first.",
         finish,
         "Reply with a short summary of what you changed.",
@@ -184,14 +290,17 @@ def review_prompt(fmt, status, views):
     ])
 
 
-def revise_prompt(fmt, change, status, inputs):
-    target = "./object.js" if fmt == "three" else "./object.svg"
-    finish = ("Run `node check.mjs` until it prints OK before finishing."
-              if fmt == "three" else "Validate with `xmllint --noout object.svg` before finishing.")
+def revise_prompt(fmt, change, status, inputs, blender=None):
+    target = FILES[fmt]["object"]
+    finish = {"three": "Run `node check.mjs` until it prints OK before finishing.",
+              "svg": "Validate with `xmllint --noout object.svg` before finishing.",
+              "blender": BLENDER_FINISH}[fmt]
+    # A revision is a new Codex thread, so the Blender one needs the contract again.
+    read = (blender_contract(*blender, existing=True) + "\n\nRevise that object."
+            if fmt == "blender" else
+            f"Revise the existing ./{target} in this folder. Read it first.")
     lines = [
-        f"Revise the existing {target} in this folder. Read it first. The attached "
-        "render(s) show its current state." if status else
-        f"Revise the existing {target} in this folder. Read it first.",
+        read + (" The attached render(s) show its current state." if status else ""),
         status_summary(status) if status else "",
         "",
         "=== CHANGE REQUEST ===", change.strip(), "=== END CHANGE REQUEST ===", "",
@@ -280,6 +389,8 @@ def run_codex(args, prompt, images, timeout, label):
                 elif item.get("type") == "command_execution":
                     cmdline = (item.get("command") or "")[:90].replace("\n", " ")
                     log(f"  $ {cmdline}")
+                elif item.get("type") == "mcp_tool_call":
+                    log(f"  > {item.get('tool')}" + ("  (failed)" if item.get("error") else ""))
             elif etype == "error":
                 err_lines.append(json.dumps(evt)[:500])
         proc.wait()
@@ -314,6 +425,30 @@ def codex_resume_args(thread_id, effort):
             "-c", 'sandbox_mode="workspace-write"', "-c", 'approval_policy="never"']
 
 
+def blender_mcp_args(mcp_cmd, port, build_dir):
+    """`-c` overrides that make the throwaway Blender the only MCP server Codex
+    sees. Overrides merge into the user's config rather than replace it, so
+    every server configured there is switched off by name: if the user's own
+    Blender server stayed visible, Astra could edit the session they have open."""
+    r = subprocess.run(["codex", "mcp", "list", "--json"], capture_output=True, text=True,
+                       cwd=build_dir)
+    if r.returncode != 0:
+        raise RuntimeError(f"`codex mcp list --json` failed: {r.stderr.strip()[-300:]}")
+    args = []
+    for srv in json.loads(r.stdout):
+        args += ["-c", f"mcp_servers.{srv['name']}.enabled=false"]
+    env = {"BLENDER_HOST": "127.0.0.1", "BLENDER_PORT": str(port),
+           "DISABLE_TELEMETRY": "true", "BLENDER_MCP_SAFE_MODE": "1"}
+    # json.dumps output is valid TOML for strings and string arrays. The tools
+    # are pre-approved because `approval_policy="never"` rejects MCP calls otherwise.
+    server = (f"command={json.dumps(mcp_cmd[0])},"
+              f"args={json.dumps(mcp_cmd[1:] + ['--host', '127.0.0.1', '--port', str(port)])},"
+              "env={" + ",".join(f"{k}={json.dumps(v)}" for k, v in env.items()) + "},"
+              "startup_timeout_sec=90,tool_timeout_sec=600,required=true,"
+              f'default_tools_approval_mode="approve",enabled_tools={json.dumps(MCP_TOOLS)}')
+    return args + ["-c", f"mcp_servers.{MCP_SERVER}={{{server}}}"]
+
+
 # ----------------------------------------------------------------------------
 # build dir + node deps
 # ----------------------------------------------------------------------------
@@ -338,8 +473,9 @@ def ensure_three():
 def prepare_build_dir(build_dir, fmt):
     build_dir.mkdir(parents=True, exist_ok=True)
     viewer_src = (ASSETS / FILES[fmt]["viewer"]).read_text()
-    (build_dir / "viewer.html").write_text(viewer_src.replace("{{THREE_VERSION}}", THREE_VERSION))
-    if fmt == "three":
+    (build_dir / "viewer.html").write_text(viewer_src.replace("{{THREE_VERSION}}", THREE_VERSION)
+                                           .replace("{{OBJECT_FILE}}", FILES[fmt]["object"]))
+    if fmt != "svg":
         shutil.copy2(ASSETS / "check.mjs", build_dir / "check.mjs")
         nm = ensure_three()
         link = build_dir / "node_modules"
@@ -351,6 +487,80 @@ def cleanup_build_dir(build_dir):
     link = build_dir / "node_modules"
     if link.is_symlink():
         link.unlink()
+    for backup in build_dir.glob("object.blend[0-9]*"):   # Blender's save-versions (.blend1)
+        backup.unlink()
+
+
+# ----------------------------------------------------------------------------
+# blender (--format blender)
+# ----------------------------------------------------------------------------
+
+def find_blender(override):
+    cands = [override, os.environ.get("CODEX_3D_BLENDER"),
+             "/Applications/Blender.app/Contents/MacOS/Blender", shutil.which("blender"),
+             *sorted(glob.glob(r"C:\Program Files\Blender Foundation\Blender*\blender.exe"),
+                     reverse=True)]
+    for c in cands:
+        if c and Path(c).exists():
+            return c
+    return None
+
+
+def find_blender_mcp():
+    """The MCP server as an argv list. Deliberately never the bare `blender-mcp`
+    name, which in some setups is a launcher pinned to an always-on Blender."""
+    override = os.environ.get("CODEX_3D_BLENDER_MCP")
+    if override:
+        return shlex.split(override)
+    found = shutil.which("mcp-for-blender")
+    return [found] if found else None
+
+
+def start_blender(blender, blend=None):
+    """Start a throwaway GUI Blender whose MCP add-on listens on a free port.
+    Returns (proc, port, scene name). The add-on cannot serve in background
+    mode, so this needs a logged-in graphical session."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    scene = f"codex3d_{port}"
+    # The add-on reads its port from a scene property. Put it back once the
+    # server is bound so object.blend does not carry this run's port, and name
+    # the scene so Astra can check which Blender it is talking to.
+    expr = ("import bpy; s = bpy.context.scene; p = s.blendermcp_port; "
+            f"s.blendermcp_port = {port}; bpy.ops.blendermcp.start_server(); "
+            f"s.blendermcp_port = p; s.name = '{scene}'")
+    cmd = [blender, "--window-geometry", "0", "0", "1280", "800"]
+    if blend:
+        cmd.append(str(blend))
+    cmd += ["--python-exit-code", "1", "--python-expr", expr]
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            start_new_session=True)
+    t0 = time.time()
+    while time.time() - t0 < 60 and proc.poll() is None:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                log(f"  blender pid {proc.pid}, MCP add-on on 127.0.0.1:{port}")
+                return proc, port, scene
+        except OSError:
+            time.sleep(0.25)
+    why = (f"exited during startup (rc={proc.returncode})" if proc.poll() is not None
+           else "did not open its MCP port within 60 s")
+    stop_blender(proc)
+    raise RuntimeError(f"Blender {why}. It needs a logged-in graphical session and the Blender "
+                       "MCP add-on installed and enabled (`mcp-for-blender install-addon`).")
+
+
+def stop_blender(proc):
+    if proc is None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
 
 # ----------------------------------------------------------------------------
@@ -490,15 +700,18 @@ def parse_size(s):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Build a 3D object (three.js module) or 2D vector object (SVG) with "
-                    "GPT-6-Astra via Codex, then render it headlessly for inspection.")
+        description="Build a 3D object (three.js module, or a GLB modelled in Blender) or 2D "
+                    "vector object (SVG) with GPT-6-Astra via Codex, then render it headlessly "
+                    "for inspection.")
     ap.add_argument("--prompt", help="Object specification text.")
     ap.add_argument("--prompt-file", help="File containing the specification.")
     ap.add_argument("--out", required=True,
-                    help="Build directory (created). Receives object.js|object.svg, viewer.html, "
-                         "preview.png, sheet.png, notes.md.")
+                    help="Build directory (created). Receives object.js|object.svg|object.glb, "
+                         "viewer.html, preview.png, sheet.png, notes.md.")
     ap.add_argument("--format", default="three", choices=sorted(FILES),
-                    help="three = three.js ES module (default); svg = 2D vector object.")
+                    help="three = three.js ES module (default); svg = 2D vector object; "
+                         "blender = object.glb + object.blend modelled in a throwaway Blender "
+                         "through Blender MCP.")
     ap.add_argument("--input", action="append", default=[],
                     help="Reference image to attach (repeatable).")
     ap.add_argument("--passes", type=int, default=2,
@@ -516,6 +729,9 @@ def main():
                     help="Render size WxH (default 1536x1024).")
     ap.add_argument("--bg", default="1a1a22", help="Render background hex (default 1a1a22).")
     ap.add_argument("--chrome", default=None, help="Path to a Chrome/Chromium binary.")
+    ap.add_argument("--blender", default=None,
+                    help="Path to a Blender binary (--format blender). The MCP server is "
+                         "`mcp-for-blender` on PATH, or the command in CODEX_3D_BLENDER_MCP.")
     ap.add_argument("--timeout", type=int, default=1500, help="Seconds per Codex pass (default 1500).")
     ap.add_argument("--json", action="store_true", help="Emit JSON result on stdout.")
     args = ap.parse_args()
@@ -539,13 +755,32 @@ def main():
     chrome = find_chrome(args.chrome)
     if not chrome:
         fail(args, "no Chrome/Chromium found; pass --chrome PATH or set CODEX_3D_CHROME")
+    blender_bin = mcp_cmd = None
+    if fmt == "blender" and not args.render_only:
+        blender_bin, mcp_cmd = find_blender(args.blender), find_blender_mcp()
+        if not blender_bin:
+            fail(args, "no Blender found; pass --blender PATH or set CODEX_3D_BLENDER")
+        if not mcp_cmd:
+            fail(args, "Blender MCP server not found; put `mcp-for-blender` on PATH or set "
+                       "CODEX_3D_BLENDER_MCP to its command")
+        if args.revise and not obj.with_suffix(".blend").exists():
+            fail(args, f"{obj.with_suffix('.blend')} does not exist; nothing to revise")
 
     t0 = time.time()
     prepare_build_dir(build_dir, fmt)
     notes = []
     thread_id = None
     results = {}
+    blender_proc, mcp_args, contract_args = None, [], None
     try:
+        if blender_bin:
+            try:
+                blender_proc, port, scene = start_blender(
+                    blender_bin, obj.with_suffix(".blend") if args.revise else None)
+                mcp_args = blender_mcp_args(mcp_cmd, port, build_dir)
+            except (OSError, RuntimeError, ValueError) as exc:
+                fail(args, str(exc))
+            contract_args = (build_dir, scene)
         if args.render_only:
             log(f"[codex-3d] rendering {obj.name} in {build_dir}")
             results = render(build_dir, fmt, args.size, bg, chrome)
@@ -555,18 +790,20 @@ def main():
                 results = render(build_dir, fmt, args.size, bg, chrome)
                 status = primary_status(results)
                 shots = [Path(r["png"]) for r in results.values() if r["png"]]
-                prompt = revise_prompt(fmt, args.revise, status, inputs)
-                thread_id, msg, rc = run_codex(codex_exec_args(build_dir, args.model, args.effort),
-                                               prompt, shots + inputs, args.timeout, "revise")
+                prompt = revise_prompt(fmt, args.revise, status, inputs, contract_args)
+                thread_id, msg, rc = run_codex(
+                    codex_exec_args(build_dir, args.model, args.effort) + mcp_args,
+                    prompt, shots + inputs, args.timeout, "revise")
                 notes.append(("Revision: " + args.revise.strip()[:120], msg))
                 check_codex(args, thread_id, msg, rc, obj)
             else:
                 log(f"[codex-3d] building {obj.name} with {args.model} ({args.effort}), "
                     f"{args.passes} pass(es)")
                 (build_dir / "spec.txt").write_text(spec.strip() + "\n")
-                prompt = build_prompt(fmt, spec, inputs)
-                thread_id, msg, rc = run_codex(codex_exec_args(build_dir, args.model, args.effort),
-                                               prompt, inputs, args.timeout, "build")
+                prompt = build_prompt(fmt, spec, inputs, contract_args)
+                thread_id, msg, rc = run_codex(
+                    codex_exec_args(build_dir, args.model, args.effort) + mcp_args,
+                    prompt, inputs, args.timeout, "build")
                 notes.append(("Build", msg))
                 check_codex(args, thread_id, msg, rc, obj)
 
@@ -579,14 +816,15 @@ def main():
                     break
                 log(f"[codex-3d] review pass {i - 1}: Astra inspects its own render")
                 prompt = review_prompt(fmt, status, list(results))
-                _, msg, rc = run_codex(codex_resume_args(thread_id, args.effort), prompt, shots,
-                                       args.timeout, f"review {i - 1}")
+                _, msg, rc = run_codex(codex_resume_args(thread_id, args.effort) + mcp_args,
+                                       prompt, shots, args.timeout, f"review {i - 1}")
                 notes.append((f"Review pass {i - 1}", msg))
                 if rc == 124:
                     log("  review pass timed out; keeping the previous version")
                     break
                 results = render(build_dir, fmt, args.size, bg, chrome)
     finally:
+        stop_blender(blender_proc)
         cleanup_build_dir(build_dir)
 
     status = primary_status(results)

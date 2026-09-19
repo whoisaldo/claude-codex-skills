@@ -1,16 +1,40 @@
 // Contract check for ./object.js. Run with: node check.mjs
+// For a Blender build, checks the exported file instead: node check.mjs object.glb
 // Needs `three` resolvable (the build script links node_modules in for the run).
 import * as THREE from 'three';
 
-const fmt = v => (Math.round(v * 1000) / 1000).toString();
+const FILE = process.argv[2] || 'object.js';
+const RERUN = 'node check.mjs' + (process.argv[2] ? ' ' + process.argv[2] : '');
+const fmt =v => (Math.round(v * 1000) / 1000).toString();
 const problems = [];
 const warnings = [];
 
+// Load a GLB the way the page will and adapt it to the object.js shape: the
+// glTF nodes (the Blender objects, marked by GLTFLoader with userData.name) are the parts.
+async function importGlb() {
+  const { readFile } = await import('node:fs/promises');
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const buf = await readFile('./' + FILE);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8'));
+  if (json.images && json.images.length) {
+    throw new Error(`${json.images.length} image texture(s) embedded; the contract allows plain Principled BSDF values only`);
+  }
+  const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+  const parts = {};
+  gltf.scene.traverse(o => {
+    if (o === gltf.scene || !('name' in o.userData)) return;
+    parts[o.name] = o;
+    if (o.name !== o.userData.name) warnings.push(`"${o.userData.name}" is named "${o.name}" in three.js; rename it in Blender (letters, digits, underscores)`);
+  });
+  gltf.scene.userData.parts = parts;
+  return { createObject: () => gltf.scene, meta: {} };
+}
+
 let mod;
 try {
-  mod = await import('./object.js?v=' + Date.now());
+  mod = FILE.endsWith('.glb') ? await importGlb() : await import('./object.js?v=' + Date.now());
 } catch (err) {
-  console.error('FAIL: object.js could not be imported\n' + (err && err.stack || err));
+  console.error(`FAIL: ${FILE} could not be imported\n` + (err && err.stack || err));
   process.exit(1);
 }
 if (typeof mod.createObject !== 'function') problems.push('missing export: createObject()');
@@ -94,5 +118,5 @@ if (group && group.isObject3D) {
 
 for (const w of warnings) console.log('WARN  ' + w);
 for (const p of problems) console.log('FAIL  ' + p);
-if (problems.length) { console.log(`\n${problems.length} contract problem(s). Fix object.js and re-run node check.mjs`); process.exit(1); }
-console.log('\nOK  object.js satisfies the codex-3d contract');
+if (problems.length) { console.log(`\n${problems.length} contract problem(s). Fix ${FILE} and re-run ${RERUN}`); process.exit(1); }
+console.log(`\nOK  ${FILE} satisfies the codex-3d contract`);

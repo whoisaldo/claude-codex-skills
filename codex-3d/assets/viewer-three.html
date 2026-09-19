@@ -27,7 +27,8 @@
 <div id="status"></div>
 <pre id="error"></pre>
 <script type="module">
-// Consumes ./object.js (contract: createObject() -> THREE.Group, optional updateObject(group, t, dt), meta).
+// Consumes ./object.js (contract: createObject() -> THREE.Group, optional updateObject(group, t, dt), meta),
+// or ./object.glb from a Blender build (named glTF nodes are the parts, animation clips the idle animation).
 // Query params:
 //   view=hero|sheet   hero = single three-quarter view (default); sheet = 2x2 contact sheet
 //   static=1          render one frame and stop (headless screenshots)
@@ -38,6 +39,8 @@ const VIEW = q.get('view') || 'hero';
 const STATIC = q.get('static') === '1';
 const BG = '#' + (q.get('bg') || '1a1a22');
 const T0 = parseFloat(q.get('t') || '0');
+const FILE = '{{OBJECT_FILE}}';
+const GLB = FILE.endsWith('.glb');
 document.body.style.background = BG;
 
 const errorEl = document.getElementById('error');
@@ -52,7 +55,7 @@ let failed = false;
 function fail(err) {
   if (failed) return; failed = true;
   const text = String(err && err.stack || err);
-  errorEl.textContent = 'object.js failed\n\n' + text;
+  errorEl.textContent = FILE + ' failed\n\n' + text;
   errorEl.style.display = 'block';
   document.title = 'ERROR';
   report({ ok: false, error: text });
@@ -64,8 +67,22 @@ try {
   const THREE = await import('three');
   const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
   const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
-  const mod = await import('./object.js?v=' + Date.now());
-  if (typeof mod.createObject !== 'function') throw new Error('object.js must export createObject()');
+  let mod;
+  if (GLB) {
+    // Adapt the glTF to the object.js shape so everything below is shared.
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const gltf = await new GLTFLoader().loadAsync('./' + FILE + '?v=' + Date.now());
+    const mixer = new THREE.AnimationMixer(gltf.scene);
+    for (const clip of gltf.animations) mixer.clipAction(clip).play();
+    mod = {
+      createObject: () => gltf.scene,
+      updateObject: gltf.animations.length ? (group, t) => mixer.setTime(t) : undefined,
+      meta: { animations: gltf.animations.map(c => c.name) },
+    };
+  } else {
+    mod = await import('./' + FILE + '?v=' + Date.now());
+    if (typeof mod.createObject !== 'function') throw new Error('object.js must export createObject()');
+  }
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -197,7 +214,9 @@ try {
   draw();
 
   const names = [];
-  object.traverse(o => { if (o !== object && o.name) names.push(o.name); });
+  // In a GLB only the glTF nodes (the Blender objects) are parts; GLTFLoader
+  // marks them with userData.name and also names the per-material meshes below them.
+  object.traverse(o => { if (o !== object && o.name && (!GLB || 'name' in o.userData)) names.push(o.name); });
   const tris = renderer.info.render.triangles;
   const fmt = v => (Math.round(v * 1000) / 1000).toString();
   statusEl.textContent = `size ${fmt(size.x)} x ${fmt(size.y)} x ${fmt(size.z)} m  |  ` +
@@ -206,7 +225,7 @@ try {
   report({
     ok: true, triangles: tris,
     size: [size.x, size.y, size.z], min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z],
-    parts: names.slice(0, 80), meta: mod.meta || null,
+    parts: GLB ? names : names.slice(0, 80), meta: mod.meta || null,
     hasUpdate: typeof mod.updateObject === 'function',
     renderer: renderer.getContext().getParameter(renderer.getContext().RENDERER),
   });

@@ -79,6 +79,22 @@ Parts to expose: tree, cabin, island
 Idle animation: whole island bobs 0.1 m over 5 s
 ```
 
+### Built in Blender (`--format blender`)
+Every 3D recipe above works unchanged. Three things differ:
+
+- Say "the ground", not `y = 0`. Blender is Z-up; the contract handles the
+  axis conversion, and `check.mjs` measures the exported file in three.js space.
+- Part names become glTF node names, so keep them to lowercase letters,
+  digits and underscores. three.js rewrites dots and spaces.
+- An idle animation is keyframed and exported as glTF clips, so give it a
+  loop: "rotor_1..rotor_4 spin one full turn every 0.2 s; body bobs 0.03 m
+  over a 2 s loop". The page plays it with an `AnimationMixer` or ignores it.
+
+Name Blender's strengths when the form needs them: "subdivision-surface body
+with bevelled panel gaps", "boolean-cut wheel arches", "curve-based exhaust
+pipes". Materials still have to be plain values per surface, because
+procedural shader nodes and image textures do not survive the glTF export.
+
 ### 2D vector object (`--format svg`)
 ```
 Object: side view (profile, nose pointing right) of <thing>
@@ -129,6 +145,8 @@ request; you will not know which one worked.
 | Object faces the wrong way | Contract says front faces +Z; `--revise "rotate so the front faces +Z"` |
 | Too many triangles | Lower the budget in `Constraints`; ask for fewer segments on hidden parts |
 | Render shows a red error page | Runtime error in `object.js`. The review pass usually fixes it; otherwise `--revise` with the error text |
+| Blender build looks right in Blender, flat or grey in the render | A procedural shader did not export. `--revise "use plain Principled BSDF values on <part>"` |
+| `getObjectByName('<part>')` returns undefined for a Blender build | The Blender name had a dot or space and three.js rewrote it; `check.mjs` warns about it. `--revise "rename <part> to snake_case"` |
 | SVG parts rotate around the wrong point | `--revise "put each wheel in its own <g> translated to the hub centre with the circle at 0,0"` |
 | SVG looks like clip art | Ask for gradient shading, a highlight stroke, and a soft ground shadow; name the medium |
 | Review pass made it worse | `--passes 1` and drive changes yourself with `--revise`, one at a time |

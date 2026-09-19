@@ -7,7 +7,7 @@ using it.
 | You need | Skill | What Codex does |
 |---|---|---|
 | A picture: hero, illustration, mockup, texture, og:image | [`codex-image`](codex-image/) | Runs its built-in `image_gen` tool. The wrapper harvests the PNG. |
-| An object: a three.js module or an animatable SVG | [`codex-3d`](codex-3d/) | Models the geometry in a sandboxed folder. The wrapper renders it headlessly and lets Astra fix its own render. |
+| An object: a three.js module, a Blender-built GLB, or an animatable SVG | [`codex-3d`](codex-3d/) | Models the geometry in a sandboxed folder, or in a throwaway Blender through Blender MCP. The wrapper renders it headlessly and lets Astra fix its own render. |
 | To know whether a running page is right | [`codex-computer-use`](codex-computer-use/) | Drives the page in headless Chrome, screenshots every state, and reports pass/fail with evidence. |
 
 Claude writes the code. Codex draws, models, or inspects. Claude looks at
@@ -39,6 +39,10 @@ around `codex exec` that gives Claude that capability from the terminal.
   `vendor/` folder on first use.
 - Google Chrome or Chromium, for `codex-3d` renders and for
   `codex-computer-use`.
+- Optional, only for `codex-3d --format blender`: Blender with the
+  [Blender MCP](https://github.com/ahujasid/mcp-for-blender) add-on enabled and
+  `mcp-for-blender` on `PATH`. The add-on needs a logged-in graphical session,
+  so it cannot run headless. Without it the other two formats work as usual.
 
 Developed and tested on macOS. Linux should work; the one macOS-only piece
 is `--exact-size` in `codex-image`, which uses `sips` and is skipped
@@ -89,7 +93,7 @@ Primary request: abstract glass ribbons sweeping across a dark field
 Composition/framing: subject on the right; left third empty for headline copy
 Constraints: no text, no logos, no watermark"
 
-# An object, about nine minutes
+# An object, about nine minutes (add --format blender to model it in Blender)
 python3 ~/.claude/skills/codex-3d/scripts/codex_3d.py --out public/3d/car \
   --prompt "Object: one low, wide retro-futuristic muscle car
 Size: 4.6 m long, wheelbase 2.75 m
@@ -118,7 +122,10 @@ event stream back. What Codex may touch is kept narrow:
   renders `viewer.html` with headless Chrome, and the viewer posts measured
   bounds, triangle count and part names (or the JavaScript error) back to a
   throwaway local server. The same Codex thread is then resumed with the
-  renders attached so Astra can fix what it sees.
+  renders attached so Astra can fix what it sees. With `--format blender`
+  Astra models in Blender instead of writing geometry code, and the wrapper
+  starts its own Blender on a free port rather than touching one you already
+  have open.
 - `codex-computer-use` starts headless Chrome outside Codex's sandbox with
   [agent-browser](https://github.com/vercel-labs/agent-browser), places the
   browser socket inside the run directory, and runs Codex with write access
